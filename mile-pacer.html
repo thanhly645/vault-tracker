@@ -1,0 +1,998 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>7:30 Mile — Lap Pacer</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
+
+  :root{
+    --cinder: #7a2e1f;
+    --track: #a63a24;
+    --track-dark: #5e2417;
+    --infield: #1f3a2e;
+    --infield-dark: #16281f;
+    --chalk: #f2ece1;
+    --chalk-dim: #cfc4b2;
+    --gold: #d9a441;
+    --ahead: #6fae7c;
+    --behind: #c1553f;
+  }
+
+  * { box-sizing: border-box; }
+
+  body{
+    margin:0;
+    min-height:100vh;
+    background: radial-gradient(ellipse at 50% -10%, #2a2420 0%, #17130f 60%, #0f0c09 100%);
+    font-family: 'Oswald', sans-serif;
+    color: var(--chalk);
+    display:flex;
+    justify-content:center;
+    padding: 24px 16px 48px;
+  }
+
+  .wrap{ width:100%; max-width:480px; }
+
+  header{ text-align:center; margin-bottom: 22px; }
+  .eyebrow{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 3px;
+    color: var(--gold);
+    text-transform: uppercase;
+  }
+  h1{
+    margin: 6px 0 2px;
+    font-size: 42px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+  }
+  .sub{ color: var(--chalk-dim); font-size: 14px; }
+
+  .goal-edit-row{
+    display:flex;
+    align-items: baseline;
+    justify-content: center;
+    gap: 8px;
+    margin: 8px 0 2px;
+  }
+  .goal-input{
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--chalk);
+    font-family: 'Oswald', sans-serif;
+    font-size: 42px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+    width: 3.6ch;
+    text-align: right;
+    padding: 0 0 2px;
+  }
+  .goal-input:focus{
+    outline: none;
+    border-bottom-color: var(--gold);
+  }
+  .goal-suffix{
+    font-size: 42px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+    color: var(--chalk);
+  }
+  .goal-set-btn{
+    align-self: center;
+    background: var(--track);
+    color: var(--chalk);
+    border: none;
+    border-radius: 8px;
+    padding: 6px 12px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    cursor: pointer;
+    margin-left: 4px;
+  }
+  .goal-set-btn:active{ transform: scale(0.95); }
+
+  .track-box{
+    position:relative;
+    background: var(--infield-dark);
+    border-radius: 100px;
+    padding: 34px 18px;
+    margin: 20px 0 18px;
+    border: 2px solid #000;
+  }
+  .oval{
+    position:relative;
+    height: 150px;
+    border-radius: 100px;
+    background: var(--track-dark);
+    border: 14px solid var(--track);
+    box-shadow: inset 0 0 0 2px rgba(242,236,225,0.25);
+  }
+  .oval::before{
+    content:'';
+    position:absolute;
+    inset: 22px;
+    background: var(--infield);
+    border-radius: 100px;
+  }
+  .marker{
+    position:absolute;
+    width:16px; height:16px;
+    border-radius:50%;
+    background: var(--gold);
+    box-shadow: 0 0 0 4px rgba(217,164,65,0.25), 0 2px 6px rgba(0,0,0,0.5);
+    top: 50%;
+    left: 6px;
+    transform: translate(-50%,-50%);
+    transition: all 0.4s ease;
+  }
+  .lap-label{
+    position:absolute;
+    font-family:'JetBrains Mono',monospace;
+    font-size: 11px;
+    color: var(--chalk-dim);
+  }
+  .ll-start{ top:-20px; left:6px; }
+  .ll-1{ top:-20px; right:6px; }
+  .ll-2{ bottom:-20px; right:6px; }
+  .ll-3{ bottom:-20px; left:6px; }
+
+  .modes{
+    display:flex;
+    gap: 10px;
+    margin-bottom: 18px;
+  }
+  .mode-btn{
+    flex:1;
+    background: #201a15;
+    border: 1px solid #3a2f26;
+    border-radius: 12px;
+    padding: 12px 8px;
+    text-align:center;
+    cursor:pointer;
+    transition: border-color 0.2s ease, background 0.2s ease;
+  }
+  .mode-btn .icon{ font-size: 20px; display:block; margin-bottom: 4px; }
+  .mode-btn .label{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    color: var(--chalk-dim);
+  }
+  .mode-btn.active{
+    border-color: var(--gold);
+    background: rgba(217,164,65,0.08);
+  }
+  .mode-btn.active .label{ color: var(--gold); }
+  .mode-note{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--chalk-dim);
+    text-align:center;
+    margin: -10px 0 16px;
+    min-height: 14px;
+  }
+  .mode-note.err{ color: var(--behind); }
+
+  .sensitivity-row{
+    background: #201a15;
+    border: 1px solid #3a2f26;
+    border-radius: 12px;
+    padding: 14px 16px 12px;
+    margin: -6px 0 18px;
+  }
+  .sensitivity-label{
+    display:flex;
+    justify-content: space-between;
+    font-family:'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--chalk-dim);
+    margin-bottom: 8px;
+  }
+  .sensitivity-label .val{ color: var(--gold); font-weight:600; }
+  .sensitivity-row input[type="range"]{
+    width: 100%;
+    accent-color: var(--gold);
+    height: 4px;
+  }
+  .sensitivity-hints{
+    display:flex;
+    justify-content: space-between;
+    font-family:'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--chalk-dim);
+    opacity: 0.6;
+    margin-top: 4px;
+  }
+  .debug-row{
+    display:flex;
+    justify-content: space-between;
+    font-family:'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--chalk-dim);
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px dashed #3a2f26;
+  }
+  .debug-row .val{ color: var(--chalk); font-weight: 600; }
+  .debug-row .val.pass{ color: var(--ahead); }
+  .debug-row .val.fail{ color: var(--behind); }
+
+  .timer-card{
+    background: #201a15;
+    border: 1px solid #3a2f26;
+    border-radius: 18px;
+    padding: 26px 20px 22px;
+    text-align:center;
+    margin-bottom: 18px;
+  }
+  .big-time{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 56px;
+    font-weight: 700;
+    letter-spacing: -1px;
+    line-height:1;
+  }
+  .lap-status{
+    margin-top: 8px;
+    font-family:'JetBrains Mono', monospace;
+    font-size: 14px;
+    min-height: 20px;
+  }
+  .lap-status.ahead{ color: var(--ahead); }
+  .lap-status.behind{ color: var(--behind); }
+
+  .gps-row{
+    display:flex;
+    justify-content: center;
+    gap: 22px;
+    margin-top: 10px;
+    font-family:'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--chalk-dim);
+  }
+  .gps-row .val{ color: var(--gold); font-weight:600; }
+
+  .controls{
+    display:flex;
+    gap: 10px;
+    margin-top: 20px;
+  }
+  button{
+    flex:1;
+    font-family:'Oswald', sans-serif;
+    font-weight:600;
+    font-size: 15px;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    padding: 14px 10px;
+    border-radius: 10px;
+    border: none;
+    cursor:pointer;
+    transition: transform 0.1s ease, opacity 0.2s ease;
+  }
+  button:active{ transform: scale(0.97); }
+  .btn-start{ background: var(--gold); color: #1f180f; }
+  .btn-lap{ background: var(--track); color: var(--chalk); }
+  .btn-reset{ background: #3a2f26; color: var(--chalk-dim); flex: 0 0 auto; padding: 14px 18px; }
+  button:disabled{ opacity: 0.35; cursor: default; }
+
+  .splits{
+    border: 1px solid #3a2f26;
+    border-radius: 14px;
+    overflow:hidden;
+  }
+  .split-row{
+    display:grid;
+    grid-template-columns: 1fr 1fr 1fr 1fr;
+    padding: 12px 14px;
+    font-family:'JetBrains Mono', monospace;
+    font-size: 13px;
+    border-bottom: 1px solid #2a231c;
+    align-items:center;
+  }
+  .split-row:last-child{ border-bottom:none; }
+  .split-row.head{
+    background:#241d16;
+    color: var(--gold);
+    font-size: 11px;
+    letter-spacing:1px;
+    text-transform:uppercase;
+  }
+  .split-row.done{ background: rgba(111,174,124,0.06); }
+  .split-row .diff.ahead{ color: var(--ahead); }
+  .split-row .diff.behind{ color: var(--behind); }
+  .split-row .diff.pending{ color: var(--chalk-dim); opacity:0.5; }
+
+  .split-toggle{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--gold);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    cursor: pointer;
+    margin-top: 6px;
+    display: inline-block;
+  }
+  .split-percent-row{
+    background: #201a15;
+    border: 1px solid #3a2f26;
+    border-radius: 12px;
+    padding: 14px 16px 12px;
+    margin: 14px 0 4px;
+  }
+  .split-percent-label{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--chalk-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 10px;
+  }
+  .split-percent-inputs{
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+  }
+  .pct-cell{
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+  }
+  .pct-cell span{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--chalk-dim);
+    text-transform: uppercase;
+  }
+  .pct-cell input{
+    width: 100%;
+    background: #17130f;
+    border: 1px solid #3a2f26;
+    border-radius: 8px;
+    color: var(--gold);
+    font-family:'JetBrains Mono', monospace;
+    font-size: 14px;
+    text-align: center;
+    padding: 8px 2px;
+  }
+  .pct-cell input:focus{ outline: none; border-color: var(--gold); }
+  .split-percent-footer{
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 12px;
+    font-family:'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--chalk-dim);
+  }
+  .split-percent-footer #pctSum.off{ color: var(--behind); }
+  .pct-reset-btn{
+    background: #3a2f26;
+    color: var(--chalk-dim);
+    border: none;
+    border-radius: 8px;
+    padding: 6px 12px;
+    font-family:'JetBrains Mono', monospace;
+    font-size: 11px;
+    text-transform: uppercase;
+    cursor: pointer;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Runway to 15' — Track Session</div>
+    <div class="goal-edit-row">
+      <input type="text" id="goalInput" class="goal-input" value="7:30" inputmode="numeric" aria-label="Goal mile time, minutes:seconds">
+      <span class="goal-suffix">Mile</span>
+      <button id="goalSetBtn" class="goal-set-btn">Set</button>
+    </div>
+    <div class="sub" id="subLabel">Even splits · 1:52.5 per lap</div>
+    <div class="split-toggle" id="splitToggle">Customize lap splits</div>
+  </header>
+
+  <div class="split-percent-row" id="splitPercentRow" style="display:none;">
+    <div class="split-percent-label">% of goal time per lap</div>
+    <div class="split-percent-inputs">
+      <div class="pct-cell"><span>L1</span><input type="number" id="pct1" value="25" min="1" max="97" step="0.5"></div>
+      <div class="pct-cell"><span>L2</span><input type="number" id="pct2" value="25" min="1" max="97" step="0.5"></div>
+      <div class="pct-cell"><span>L3</span><input type="number" id="pct3" value="25" min="1" max="97" step="0.5"></div>
+      <div class="pct-cell"><span>L4</span><input type="number" id="pct4" value="25" min="1" max="97" step="0.5"></div>
+    </div>
+    <div class="split-percent-footer">
+      <span id="pctSum">Total: 100%</span>
+      <button id="pctApplyBtn" class="goal-set-btn">Apply</button>
+      <button id="pctResetBtn" class="pct-reset-btn">Even</button>
+    </div>
+  </div>
+
+  <div class="track-box">
+    <div class="oval">
+      <div class="marker" id="marker"></div>
+      <div class="lap-label ll-start">START</div>
+      <div class="lap-label ll-1">L1</div>
+      <div class="lap-label ll-2">L2</div>
+      <div class="lap-label ll-3">L3</div>
+    </div>
+  </div>
+
+  <div class="modes">
+    <div class="mode-btn" id="clapMode">
+      <span class="icon">👏</span>
+      <span class="label">Clap Lap</span>
+    </div>
+    <div class="mode-btn" id="gpsMode">
+      <span class="icon">📍</span>
+      <span class="label">GPS Auto</span>
+    </div>
+  </div>
+  <div class="mode-note" id="modeNote"></div>
+
+  <div class="sensitivity-row" id="sensitivityRow" style="display:none;">
+    <div class="sensitivity-label">
+      <span>Clap sensitivity</span>
+      <span class="val" id="sensitivityVal">Medium</span>
+    </div>
+    <input type="range" id="sensitivitySlider" min="20" max="90" value="55" step="1">
+    <div class="sensitivity-hints"><span>More sensitive</span><span>Less sensitive</span></div>
+    <div class="debug-row" id="debugRow">
+      <div>Level <span class="val" id="dbgRms">—</span></div>
+      <div>Needed <span class="val" id="dbgNeeded">—</span></div>
+      <div>Shape <span class="val" id="dbgShape">—</span></div>
+    </div>
+  </div>
+
+  <div class="timer-card">
+    <div class="big-time" id="display">0:00.0</div>
+    <div class="lap-status" id="status"></div>
+    <div class="gps-row" id="gpsRow" style="display:none;">
+      <div>Pace <span class="val" id="gpsPace">—</span></div>
+      <div>Predicted <span class="val" id="gpsPredicted">—</span></div>
+    </div>
+    <div class="controls">
+      <button class="btn-start" id="startBtn">Start</button>
+      <button class="btn-lap" id="lapBtn" disabled>Lap</button>
+      <button class="btn-reset" id="resetBtn">Reset</button>
+    </div>
+  </div>
+
+  <div class="splits" id="splitsTable"></div>
+</div>
+
+<script>
+  let goalTotalSeconds = 450; // 7:30
+  let lapPercents = [25, 25, 25, 25];
+  let goals = buildGoals(goalTotalSeconds, lapPercents);
+  const LAP_METERS = 400;
+  const MILE_METERS = 1609.34;
+
+  let startTime = null;
+  let elapsed = 0;
+  let running = false;
+  let rafId = null;
+  let lapIndex = 0;
+  const actualCum = [];
+
+  function buildGoals(totalSeconds, percents){
+    const arr = [];
+    let cumPct = 0;
+    for (let i = 0; i < 4; i++){
+      cumPct += percents[i];
+      arr.push({ lap: i + 1, cum: totalSeconds * (cumPct / 100), label: fmt(totalSeconds * (cumPct / 100)) });
+    }
+    return arr;
+  }
+
+  let clapEnabled = false;
+  let audioCtx = null, analyser = null, timeData = null, freqData = null, clapRafId = null;
+  let lastClapTime = 0;
+  let noiseFloor = 0.02;
+  let spikeMultiplier = 2.6;      // how many times louder than ambient floor a spike must be
+  let highRatioThreshold = 0.40;  // how much of the spike's energy must be high-frequency (percussive)
+  let highBinStart = 0;
+  let pendingClap = null;         // { time, peakRms } — candidate spike awaiting decay confirmation
+  const CLAP_COOLDOWN_MS = 700;
+  const DECAY_CHECK_MS = 120;     // how long a real clap takes to die back down
+  const DECAY_RATIO = 0.5;        // must fall to at most half its peak (or near floor) to count as a clap
+
+  let gpsEnabled = false;
+  let watchId = null;
+  let totalDistance = 0;
+  let lastPos = null;
+  let recentSpeeds = [];
+
+  const display = document.getElementById('display');
+  const status = document.getElementById('status');
+  const marker = document.getElementById('marker');
+  const startBtn = document.getElementById('startBtn');
+  const lapBtn = document.getElementById('lapBtn');
+  const resetBtn = document.getElementById('resetBtn');
+  const splitsTable = document.getElementById('splitsTable');
+  const clapModeBtn = document.getElementById('clapMode');
+  const gpsModeBtn = document.getElementById('gpsMode');
+  const modeNote = document.getElementById('modeNote');
+  const gpsRow = document.getElementById('gpsRow');
+  const gpsPaceEl = document.getElementById('gpsPace');
+  const gpsPredictedEl = document.getElementById('gpsPredicted');
+  const goalInput = document.getElementById('goalInput');
+  const goalSetBtn = document.getElementById('goalSetBtn');
+  const subLabel = document.getElementById('subLabel');
+  const sensitivityRow = document.getElementById('sensitivityRow');
+  const sensitivitySlider = document.getElementById('sensitivitySlider');
+  const sensitivityVal = document.getElementById('sensitivityVal');
+  const dbgRms = document.getElementById('dbgRms');
+  const dbgNeeded = document.getElementById('dbgNeeded');
+  const dbgShape = document.getElementById('dbgShape');
+
+  function fmt(sec){
+    const m = Math.floor(sec / 60);
+    const s = sec - m*60;
+    return m + ':' + s.toFixed(1).padStart(4,'0');
+  }
+
+  function fmtWhole(sec){
+    const m = Math.floor(sec / 60);
+    const s = Math.round(sec - m*60);
+    return m + ':' + String(s).padStart(2,'0');
+  }
+
+  function note(msg, isErr){
+    modeNote.textContent = msg;
+    modeNote.className = 'mode-note' + (isErr ? ' err' : '');
+  }
+
+  function renderSplits(){
+    let html = '<div class="split-row head"><div>Lap</div><div>Goal</div><div>Actual</div><div>Diff</div></div>';
+    goals.forEach((g, i) => {
+      const done = i < actualCum.length;
+      const actual = done ? fmt(actualCum[i]) : '—';
+      let diffHtml = '<span class="diff pending">—</span>';
+      if (done){
+        const diff = actualCum[i] - g.cum;
+        const sign = diff <= 0 ? '−' : '+';
+        const cls = diff <= 0 ? 'ahead' : 'behind';
+        diffHtml = '<span class="diff ' + cls + '">' + sign + Math.abs(diff).toFixed(1) + 's</span>';
+      }
+      html += '<div class="split-row ' + (done ? 'done' : '') + '">' +
+        '<div>Lap ' + g.lap + '</div>' +
+        '<div>' + g.label + '</div>' +
+        '<div>' + actual + '</div>' +
+        '<div>' + diffHtml + '</div>' +
+      '</div>';
+    });
+    splitsTable.innerHTML = html;
+  }
+
+  function updateMarker(){
+    const w = document.querySelector('.oval').clientWidth;
+    const lapProgress = lapIndex % 2 === 0 ? 8 : w - 8;
+    marker.style.left = lapProgress + 'px';
+  }
+
+  function recordLap(){
+    if (lapIndex >= goals.length || !running) return;
+    actualCum.push(elapsed);
+    lapIndex++;
+    updateMarker();
+    renderSplits();
+    if (lapIndex >= goals.length){
+      finish();
+    }
+  }
+
+  function finish(){
+    lapBtn.disabled = true;
+    running = false;
+    cancelAnimationFrame(rafId);
+    startBtn.disabled = true;
+    const finalDiff = elapsed - goalTotalSeconds;
+    status.textContent = finalDiff <= 0
+      ? (Math.abs(finalDiff).toFixed(1) + 's under goal — nice.')
+      : (finalDiff.toFixed(1) + 's over goal.');
+    status.className = 'lap-status ' + (finalDiff <= 0 ? 'ahead' : 'behind');
+    stopClapListening();
+    stopGps();
+  }
+
+  function tick(){
+    if (!running) return;
+    elapsed = (performance.now() - startTime) / 1000;
+    display.textContent = fmt(elapsed);
+
+    if (lapIndex < goals.length){
+      const goalCum = goals[lapIndex].cum;
+      const diff = elapsed - goalCum;
+      if (diff <= 0){
+        status.textContent = Math.abs(diff).toFixed(1) + 's ahead of Lap ' + (lapIndex+1) + ' goal';
+        status.className = 'lap-status ahead';
+      } else {
+        status.textContent = diff.toFixed(1) + 's behind Lap ' + (lapIndex+1) + ' goal';
+        status.className = 'lap-status behind';
+      }
+    }
+    rafId = requestAnimationFrame(tick);
+  }
+
+  startBtn.addEventListener('click', () => {
+    if (!running){
+      startTime = performance.now() - elapsed*1000;
+      running = true;
+      startBtn.textContent = 'Pause';
+      lapBtn.disabled = false;
+      tick();
+    } else {
+      running = false;
+      cancelAnimationFrame(rafId);
+      startBtn.textContent = 'Resume';
+    }
+  });
+
+  lapBtn.addEventListener('click', recordLap);
+
+  function resetRun(){
+    running = false;
+    cancelAnimationFrame(rafId);
+    elapsed = 0; lapIndex = 0; actualCum.length = 0;
+    totalDistance = 0; lastPos = null; recentSpeeds = [];
+    display.textContent = '0:00.0';
+    status.textContent = '';
+    status.className = 'lap-status';
+    startBtn.textContent = 'Start';
+    startBtn.disabled = false;
+    lapBtn.disabled = true;
+    marker.style.left = '8px';
+    gpsPaceEl.textContent = '—';
+    gpsPredictedEl.textContent = '—';
+    renderSplits();
+
+    // if a lap just finished, it stops mic/GPS listening — restart it here
+    // so the toggles that still show "on" actually keep working after reset
+    if (clapEnabled && !audioCtx){
+      startClapListening();
+    }
+    if (gpsEnabled && watchId === null){
+      startGps();
+    }
+  }
+
+  resetBtn.addEventListener('click', resetRun);
+
+  function parseGoalInput(text){
+    const m = text.trim().match(/^(\d{1,2}):([0-5]?\d)(?:\.(\d))?$/);
+    if (!m) return null;
+    const mins = parseInt(m[1], 10);
+    const secs = parseInt(m[2], 10);
+    const tenths = m[3] ? parseInt(m[3], 10) / 10 : 0;
+    const total = mins * 60 + secs + tenths;
+    if (total < 60 || total > 3600) return null; // sanity bounds
+    return total;
+  }
+
+  function isEvenSplit(){
+    return lapPercents.every(p => Math.abs(p - 25) < 0.01);
+  }
+
+  function updateSubLabel(){
+    if (isEvenSplit()){
+      subLabel.textContent = 'Even splits · ' + fmt(goalTotalSeconds / 4) + ' per lap';
+    } else {
+      subLabel.textContent = 'Custom splits · ' + lapPercents.map(p => p.toFixed(1).replace(/\.0$/, '') + '%').join(' / ');
+    }
+  }
+
+  function applyGoal(totalSeconds){
+    goalTotalSeconds = totalSeconds;
+    goals = buildGoals(totalSeconds, lapPercents);
+    goalInput.value = fmtWhole(totalSeconds);
+    updateSubLabel();
+    resetRun();
+  }
+
+  function handleGoalSet(){
+    const parsed = parseGoalInput(goalInput.value);
+    if (parsed === null){
+      goalInput.value = fmtWhole(goalTotalSeconds); // revert to last valid value
+      note('Enter a valid mile goal like 6:00 or 7:30.', true);
+      return;
+    }
+    applyGoal(parsed);
+  }
+
+  goalSetBtn.addEventListener('click', handleGoalSet);
+  goalInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter'){
+      goalInput.blur();
+      handleGoalSet();
+    }
+  });
+
+  const splitToggle = document.getElementById('splitToggle');
+  const splitPercentRow = document.getElementById('splitPercentRow');
+  const pctInputs = [1,2,3,4].map(i => document.getElementById('pct' + i));
+  const pctSum = document.getElementById('pctSum');
+  const pctApplyBtn = document.getElementById('pctApplyBtn');
+  const pctResetBtn = document.getElementById('pctResetBtn');
+
+  splitToggle.addEventListener('click', () => {
+    const showing = splitPercentRow.style.display !== 'none';
+    splitPercentRow.style.display = showing ? 'none' : 'block';
+    splitToggle.textContent = showing ? 'Customize lap splits' : 'Hide lap split editor';
+  });
+
+  function refreshPctSum(){
+    const total = pctInputs.reduce((a, el) => a + (Number(el.value) || 0), 0);
+    pctSum.textContent = 'Total: ' + total.toFixed(1).replace(/\.0$/, '') + '%';
+    pctSum.className = Math.abs(total - 100) < 0.05 ? '' : 'off';
+  }
+  pctInputs.forEach(el => el.addEventListener('input', refreshPctSum));
+
+  pctApplyBtn.addEventListener('click', () => {
+    const raw = pctInputs.map(el => Number(el.value));
+    const sum = raw.reduce((a, b) => a + b, 0);
+    if (!sum || raw.some(v => !(v > 0))){
+      note('Each lap needs a percentage greater than 0.', true);
+      return;
+    }
+    // normalize so it always totals exactly 100%, even if the person's
+    // numbers were a little off — then reflect the normalized values back
+    const normalized = raw.map(v => (v / sum) * 100);
+    lapPercents = normalized;
+    pctInputs.forEach((el, i) => { el.value = normalized[i].toFixed(1).replace(/\.0$/, ''); });
+    refreshPctSum();
+    goals = buildGoals(goalTotalSeconds, lapPercents);
+    updateSubLabel();
+    resetRun();
+  });
+
+  pctResetBtn.addEventListener('click', () => {
+    lapPercents = [25, 25, 25, 25];
+    pctInputs.forEach(el => { el.value = 25; });
+    refreshPctSum();
+    goals = buildGoals(goalTotalSeconds, lapPercents);
+    updateSubLabel();
+    resetRun();
+  });
+
+  function startClapListening(){
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+      note('Microphone not available on this device/browser.', true);
+      clapEnabled = false;
+      clapModeBtn.classList.remove('active');
+      return;
+    }
+    navigator.mediaDevices.getUserMedia({ audio: true })
+      .then(stream => {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const source = audioCtx.createMediaStreamSource(stream);
+        analyser = audioCtx.createAnalyser();
+        analyser.fftSize = 1024;
+        source.connect(analyser);
+        timeData = new Uint8Array(analyser.fftSize);
+        freqData = new Uint8Array(analyser.frequencyBinCount);
+        const binHz = audioCtx.sampleRate / analyser.fftSize;
+        highBinStart = Math.floor(2000 / binHz); // ~2kHz+ = percussive/clap range
+        note('Listening for claps — clap sharply to log a lap.');
+        clapListenLoop();
+      })
+      .catch(() => {
+        note('Microphone permission denied — clap lap disabled.', true);
+        clapEnabled = false;
+        clapModeBtn.classList.remove('active');
+      });
+  }
+
+  function clapListenLoop(){
+    if (!clapEnabled || !analyser) return;
+    analyser.getByteTimeDomainData(timeData);
+    analyser.getByteFrequencyData(freqData);
+
+    // RMS loudness of this frame (0..~1)
+    let sumSq = 0;
+    for (let i = 0; i < timeData.length; i++){
+      const v = (timeData[i] - 128) / 128;
+      sumSq += v * v;
+    }
+    const rms = Math.sqrt(sumSq / timeData.length);
+
+    // how much of the energy sits in the percussive/high-frequency range
+    let totalEnergy = 0, highEnergy = 0;
+    for (let i = 0; i < freqData.length; i++){
+      totalEnergy += freqData[i];
+      if (i >= highBinStart) highEnergy += freqData[i];
+    }
+    const highRatio = totalEnergy > 0 ? highEnergy / totalEnergy : 0;
+
+    const now = performance.now();
+    const isLoudSpike = rms > noiseFloor * spikeMultiplier && rms > 0.035;
+    const isClapShaped = highRatio > highRatioThreshold;
+
+    dbgRms.textContent = rms.toFixed(3);
+    dbgNeeded.textContent = (noiseFloor * spikeMultiplier).toFixed(3);
+    dbgShape.textContent = highRatio.toFixed(2) + ' / ' + highRatioThreshold.toFixed(2);
+    dbgShape.className = 'val ' + (isClapShaped ? 'pass' : 'fail');
+
+    if (pendingClap){
+      // we already saw a promising loud + broadband spike — now waiting to see
+      // if it dies back down quickly (a clap) or keeps going (voice, wind, traffic)
+      if (rms > pendingClap.peakRms) pendingClap.peakRms = rms;
+      dbgRms.className = 'val pass';
+
+      if (now - pendingClap.time >= DECAY_CHECK_MS){
+        const decayedEnough = rms < pendingClap.peakRms * DECAY_RATIO || rms < noiseFloor * 1.5;
+        if (decayedEnough && now - lastClapTime > CLAP_COOLDOWN_MS){
+          lastClapTime = now;
+          flashClapDetected();
+          if (running) recordLap();
+        }
+        pendingClap = null;
+      }
+    } else if (isLoudSpike && isClapShaped){
+      // candidate onset — don't trigger yet, wait to see if it decays like a clap
+      pendingClap = { time: now, peakRms: rms };
+      dbgRms.className = 'val pass';
+    } else {
+      dbgRms.className = 'val';
+      // track ambient noise continuously so sustained sound (wind, traffic,
+      // footsteps) gets absorbed into the floor instead of permanently
+      // looking like a spike no matter how the slider is set
+      noiseFloor = noiseFloor * 0.95 + rms * 0.05;
+    }
+
+    clapRafId = requestAnimationFrame(clapListenLoop);
+  }
+
+  function flashClapDetected(){
+    clapModeBtn.style.borderColor = 'var(--ahead)';
+    setTimeout(() => {
+      if (clapEnabled) clapModeBtn.style.borderColor = 'var(--gold)';
+    }, 250);
+  }
+
+  function stopClapListening(){
+    if (audioCtx){ audioCtx.close(); audioCtx = null; }
+    if (clapRafId) cancelAnimationFrame(clapRafId);
+    pendingClap = null;
+    dbgRms.textContent = '—'; dbgRms.className = 'val';
+    dbgNeeded.textContent = '—';
+    dbgShape.textContent = '—'; dbgShape.className = 'val';
+  }
+
+  clapModeBtn.addEventListener('click', () => {
+    clapEnabled = !clapEnabled;
+    clapModeBtn.classList.toggle('active', clapEnabled);
+    sensitivityRow.style.display = clapEnabled ? 'block' : 'none';
+    if (clapEnabled){
+      startClapListening();
+    } else {
+      stopClapListening();
+      note('');
+    }
+  });
+
+  function sensitivityLabel(v){
+    // slider range 20 (most sensitive) - 90 (least sensitive)
+    if (v <= 35) return 'Very high';
+    if (v <= 50) return 'High';
+    if (v <= 65) return 'Medium';
+    if (v <= 78) return 'Low';
+    return 'Very low';
+  }
+
+  function applySensitivity(v){
+    // lower v = easier to trigger (smaller jump needed, looser clap-shape requirement)
+    // higher v = stricter on both loudness jump and how "clap-shaped" the spike must be
+    spikeMultiplier = 1.8 + (v - 20) * (2.4 / 70);       // ~1.8x .. ~4.2x
+    highRatioThreshold = 0.25 + (v - 20) * (0.30 / 70);  // ~0.25 .. ~0.55
+  }
+
+  sensitivitySlider.addEventListener('input', (e) => {
+    const v = Number(e.target.value);
+    applySensitivity(v);
+    sensitivityVal.textContent = sensitivityLabel(v);
+  });
+  applySensitivity(Number(sensitivitySlider.value));
+  sensitivityVal.textContent = sensitivityLabel(Number(sensitivitySlider.value));
+
+  function haversine(lat1, lon1, lat2, lon2){
+    const R = 6371000;
+    const toRad = d => d * Math.PI / 180;
+    const dLat = toRad(lat2 - lat1);
+    const dLon = toRad(lon2 - lon1);
+    const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon/2)**2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  }
+
+  function startGps(){
+    if (!navigator.geolocation){
+      note('GPS not available on this device/browser.', true);
+      gpsEnabled = false;
+      gpsModeBtn.classList.remove('active');
+      return;
+    }
+    gpsRow.style.display = 'flex';
+    note('Acquiring GPS — auto-lap fires every 400m.');
+    watchId = navigator.geolocation.watchPosition(onGpsUpdate, onGpsError, {
+      enableHighAccuracy: true,
+      maximumAge: 0,
+      timeout: 8000
+    });
+  }
+
+  function onGpsUpdate(pos){
+    const latitude = pos.coords.latitude, longitude = pos.coords.longitude;
+    const accuracy = pos.coords.accuracy, speed = pos.coords.speed;
+    const now = performance.now();
+
+    if (accuracy && accuracy > 25){
+      return;
+    }
+
+    if (lastPos && running){
+      const d = haversine(lastPos.lat, lastPos.lon, latitude, longitude);
+      const dt = (now - lastPos.t) / 1000;
+      const impliedSpeed = dt > 0 ? d / dt : 0;
+      if (d > 0.5 && impliedSpeed < 8){
+        totalDistance += d;
+        recentSpeeds.push(impliedSpeed);
+        if (recentSpeeds.length > 8) recentSpeeds.shift();
+      }
+    }
+    lastPos = { lat: latitude, lon: longitude, t: now };
+
+    const avgRecent = recentSpeeds.length ? recentSpeeds.reduce((a,b)=>a+b,0) / recentSpeeds.length : 0;
+    const liveSpeed = (speed && speed > 0) ? speed : avgRecent;
+
+    if (liveSpeed > 0.3){
+      const mileSeconds = MILE_METERS / liveSpeed;
+      gpsPaceEl.textContent = fmt(mileSeconds) + '/mi';
+      if (running){
+        const remaining = Math.max(MILE_METERS - totalDistance, 0);
+        const remainingTime = remaining / liveSpeed;
+        gpsPredictedEl.textContent = fmt(elapsed + remainingTime);
+      }
+    } else {
+      gpsPaceEl.textContent = '—';
+      gpsPredictedEl.textContent = '—';
+    }
+
+    if (running && Math.floor(totalDistance / LAP_METERS) > lapIndex && lapIndex < goals.length){
+      recordLap();
+    }
+  }
+
+  function onGpsError(){
+    note('GPS signal lost or permission denied.', true);
+  }
+
+  function stopGps(){
+    if (watchId !== null){
+      navigator.geolocation.clearWatch(watchId);
+      watchId = null;
+    }
+  }
+
+  gpsModeBtn.addEventListener('click', () => {
+    gpsEnabled = !gpsEnabled;
+    gpsModeBtn.classList.toggle('active', gpsEnabled);
+    if (gpsEnabled){
+      startGps();
+    } else {
+      stopGps();
+      gpsRow.style.display = 'none';
+      note('');
+    }
+  });
+
+  renderSplits();
+</script>
+</body>
+</html>
