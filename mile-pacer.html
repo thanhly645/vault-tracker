@@ -643,6 +643,7 @@
     status.className = 'lap-status ' + (finalDiff <= 0 ? 'ahead' : 'behind');
     stopClapListening();
     stopGps();
+    releaseWakeLock();
   }
 
   function tick(){
@@ -665,17 +666,49 @@
     rafId = requestAnimationFrame(tick);
   }
 
+  let wakeLock = null;
+
+  async function requestWakeLock(){
+    if (!('wakeLock' in navigator)) return;
+    try {
+      wakeLock = await navigator.wakeLock.request('screen');
+      wakeLock.addEventListener('release', () => { wakeLock = null; });
+    } catch (err){
+      // permission dismissed or unsupported in this context — fail silently,
+      // the app still works, it just won't hold the screen on
+      wakeLock = null;
+    }
+  }
+
+  function releaseWakeLock(){
+    if (wakeLock){
+      wakeLock.release().catch(() => {});
+      wakeLock = null;
+    }
+  }
+
+  // most mobile browsers drop the wake lock when the tab goes to background;
+  // re-acquire it automatically when the person comes back if the run is
+  // still going, so a quick screen check mid-run doesn't lose it for good
+  document.addEventListener('visibilitychange', () => {
+    if (running && document.visibilityState === 'visible' && !wakeLock){
+      requestWakeLock();
+    }
+  });
+
   startBtn.addEventListener('click', () => {
     if (!running){
       startTime = performance.now() - elapsed*1000;
       running = true;
       startBtn.textContent = 'Pause';
       lapBtn.disabled = false;
+      requestWakeLock();
       tick();
     } else {
       running = false;
       cancelAnimationFrame(rafId);
       startBtn.textContent = 'Resume';
+      releaseWakeLock();
     }
   });
 
@@ -684,6 +717,7 @@
   function resetRun(){
     running = false;
     cancelAnimationFrame(rafId);
+    releaseWakeLock();
     elapsed = 0; lapIndex = 0; actualCum.length = 0;
     totalDistance = 0; lastPos = null; recentSpeeds = [];
     display.textContent = '0:00.0';
