@@ -126,10 +126,10 @@
     border-radius:50%;
     background: var(--gold);
     box-shadow: 0 0 0 4px rgba(217,164,65,0.25), 0 2px 6px rgba(0,0,0,0.5);
-    top: 50%;
+    top: 0px;
     left: 6px;
     transform: translate(-50%,-50%);
-    transition: all 0.4s ease;
+    z-index: 2;
   }
   .lap-label{
     position:absolute;
@@ -500,9 +500,13 @@
   let highRatioThreshold = 0.40;  // how much of the spike's energy must be high-frequency (percussive)
   let highBinStart = 0;
   let pendingClap = null;         // { time, peakRms } — candidate spike awaiting decay confirmation
-  const CLAP_COOLDOWN_MS = 700;
+  const CLAP_COOLDOWN_MS = 400;
   const DECAY_CHECK_MS = 120;     // how long a real clap takes to die back down
   const DECAY_RATIO = 0.5;        // must fall to at most half its peak (or near floor) to count as a clap
+
+  const CLAP_PATTERN_COUNT = 3;      // require this many confirmed claps to log a lap
+  const CLAP_PATTERN_WINDOW_MS = 2200; // all of them must land within this window
+  let clapPatternTimes = [];
 
   let gpsEnabled = false;
   let watchId = null;
@@ -572,17 +576,55 @@
     splitsTable.innerHTML = html;
   }
 
-  function updateMarker(){
-    const w = document.querySelector('.oval').clientWidth;
-    const lapProgress = lapIndex % 2 === 0 ? 8 : w - 8;
-    marker.style.left = lapProgress + 'px';
+  const ovalEl = document.querySelector('.oval');
+
+  // Moves the marker along the actual stadium-shaped perimeter of the track
+  // visual: two straight sides plus two semicircular ends, just like a real
+  // 400m oval. `frac` is 0-1 progress around a single lap, starting/ending
+  // at the top of the left curve (where START/finish sits).
+  function setMarkerAtLapFraction(frac){
+    const w = ovalEl.clientWidth;
+    const h = ovalEl.clientHeight;
+    const r = h / 2;
+    const straight = Math.max(w - 2 * r, 0);
+    const halfCirc = Math.PI * r;
+    const total = 2 * straight + 2 * halfCirc;
+    let d = ((frac % 1) + 1) % 1 * total; // wrap safely for any input
+
+    let x, y;
+    if (d <= straight){
+      x = r + d;
+      y = 0;
+    } else if (d <= straight + halfCirc){
+      const a = -Math.PI / 2 + (d - straight) / r;
+      x = (w - r) + r * Math.cos(a);
+      y = r + r * Math.sin(a);
+    } else if (d <= 2 * straight + halfCirc){
+      const d3 = d - (straight + halfCirc);
+      x = (w - r) - d3;
+      y = h;
+    } else {
+      const d4 = d - (2 * straight + halfCirc);
+      const a = Math.PI / 2 + d4 / r;
+      x = r + r * Math.cos(a);
+      y = r + r * Math.sin(a);
+    }
+    marker.style.left = x + 'px';
+    marker.style.top = y + 'px';
+  }
+
+  // where the pacer marker should be *right now* if running exactly on the
+  // goal pace — moves continuously in real time, independent of when laps
+  // actually get logged (claps/taps/GPS), completing 4 loops over the mile
+  function updateMarkerFromElapsed(sec){
+    const overallFraction = Math.min(sec / goalTotalSeconds, 1);
+    setMarkerAtLapFraction(overallFraction * 4);
   }
 
   function recordLap(){
     if (lapIndex >= goals.length || !running) return;
     actualCum.push(elapsed);
     lapIndex++;
-    updateMarker();
     renderSplits();
     if (lapIndex >= goals.length){
       finish();
@@ -607,6 +649,7 @@
     if (!running) return;
     elapsed = (performance.now() - startTime) / 1000;
     display.textContent = fmt(elapsed);
+    updateMarkerFromElapsed(elapsed);
 
     if (lapIndex < goals.length){
       const goalCum = goals[lapIndex].cum;
@@ -649,7 +692,7 @@
     startBtn.textContent = 'Start';
     startBtn.disabled = false;
     lapBtn.disabled = true;
-    marker.style.left = '8px';
+    updateMarkerFromElapsed(0);
     gpsPaceEl.textContent = '—';
     gpsPredictedEl.textContent = '—';
     renderSplits();
@@ -780,7 +823,7 @@
         freqData = new Uint8Array(analyser.frequencyBinCount);
         const binHz = audioCtx.sampleRate / analyser.fftSize;
         highBinStart = Math.floor(2000 / binHz); // ~2kHz+ = percussive/clap range
-        note('Listening for claps — clap sharply to log a lap.');
+        note('Listening — clap 3 times quickly to log a lap.');
         clapListenLoop();
       })
       .catch(() => {
@@ -830,8 +873,7 @@
         const decayedEnough = rms < pendingClap.peakRms * DECAY_RATIO || rms < noiseFloor * 1.5;
         if (decayedEnough && now - lastClapTime > CLAP_COOLDOWN_MS){
           lastClapTime = now;
-          flashClapDetected();
-          if (running) recordLap();
+          registerClapForPattern(now);
         }
         pendingClap = null;
       }
@@ -853,14 +895,30 @@
   function flashClapDetected(){
     clapModeBtn.style.borderColor = 'var(--ahead)';
     setTimeout(() => {
-      if (clapEnabled) clapModeBtn.style.borderColor = 'var(--gold)';
+      clapModeBtn.style.borderColor = clapEnabled ? 'var(--gold)' : '';
     }, 250);
+  }
+
+  function registerClapForPattern(now){
+    // drop any earlier claps that have fallen outside the pattern window
+    clapPatternTimes = clapPatternTimes.filter(t => now - t <= CLAP_PATTERN_WINDOW_MS);
+    clapPatternTimes.push(now);
+    flashClapDetected();
+
+    if (clapPatternTimes.length >= CLAP_PATTERN_COUNT){
+      clapPatternTimes = [];
+      note('Triple-clap confirmed — lap logged.');
+      if (running) recordLap();
+    } else {
+      note((CLAP_PATTERN_COUNT - clapPatternTimes.length) + ' more clap(s) to log a lap…');
+    }
   }
 
   function stopClapListening(){
     if (audioCtx){ audioCtx.close(); audioCtx = null; }
     if (clapRafId) cancelAnimationFrame(clapRafId);
     pendingClap = null;
+    clapPatternTimes = [];
     dbgRms.textContent = '—'; dbgRms.className = 'val';
     dbgNeeded.textContent = '—';
     dbgShape.textContent = '—'; dbgShape.className = 'val';
@@ -874,6 +932,7 @@
       startClapListening();
     } else {
       stopClapListening();
+      clapModeBtn.style.borderColor = ''; // clear leftover flash-effect inline style
       note('');
     }
   });
@@ -993,6 +1052,7 @@
   });
 
   renderSplits();
+  updateMarkerFromElapsed(0);
 </script>
 </body>
 </html>
